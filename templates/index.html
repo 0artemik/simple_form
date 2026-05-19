@@ -5,54 +5,283 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Форма регистрации</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
-        .container { max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { color: #333; text-align: center; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], input[type="date"], input[type="tel"] {
-            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
+        :root {
+            --primary: #4CAF50;
+            --primary-dark: #388E3C;
+            --accent: #2196F3;
+            --bg: #f0f2f5;
+            --card-bg: #ffffff;
+            --text: #2c3e50;
+            --text-light: #5a6c7d;
+            --border: #dce1e8;
+            --radius: 16px;
+            --shadow: 0 8px 30px rgba(0,0,0,0.08);
         }
-        button { background: #4CAF50; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; }
-        button:hover { background: #45a049; }
-        button:disabled { background: #cccccc; cursor: not-allowed; }
-        .export-btn { background: #2196F3; margin-top: 10px; }
-        .export-btn:hover { background: #0b7dda; }
-        .flash { padding: 10px; margin-bottom: 20px; border-radius: 4px; }
-        .flash.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .flash.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .flash.warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-        .note { font-size: 0.9em; color: #666; margin-top: 5px; }
-        .consent-block { margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 4px; border: 1px solid #ddd; }
-        .consent-check { display: flex; align-items: flex-start; margin-bottom: 10px; }
-        /* Увеличенный и заметный чекбокс */
-        .consent-check input[type="checkbox"] {
-            width: 22px;
-            height: 22px;
-            min-width: 22px;
-            min-height: 22px;
-            margin-right: 12px;
-            margin-top: 2px; /* небольшая доводка по вертикали с началом текста */
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg);
+            padding: 20px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 480px;
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 32px 24px;
+            box-shadow: var(--shadow);
+        }
+
+        h1 {
+            color: var(--text);
+            text-align: center;
+            font-size: 1.8rem;
+            margin-bottom: 28px;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text);
+            font-size: 0.95rem;
+        }
+
+        input[type="text"],
+        input[type="date"],
+        input[type="tel"] {
+            width: 100%;
+            padding: 14px 16px;
+            font-size: 1rem;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: #fafbfc;
+            transition: all 0.2s ease;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.15);
+        }
+
+        .note {
+            font-size: 0.8rem;
+            color: var(--text-light);
+            margin-top: 6px;
+        }
+
+        /* Блок согласия */
+        .consent-block {
+            margin: 28px 0 24px;
+            padding: 20px 16px;
+            background: #f8fafc;
+            border-radius: 14px;
+            border: 2px solid var(--border);
+            transition: border-color 0.2s;
+        }
+
+        .consent-block:focus-within {
+            border-color: var(--accent);
+        }
+
+        .consent-check {
+            display: flex;
+            align-items: flex-start;
             cursor: pointer;
-            accent-color: #4CAF50; /* зелёный флажок в современных браузерах */
-            /* Улучшение для старых браузеров — оставляем стандартный вид, но крупнее */
+            user-select: none;
         }
+
+        /* Кастомный чекбокс */
+        .consent-check input[type="checkbox"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 28px;
+            height: 28px;
+            min-width: 28px;
+            border: 2px solid #b0bec5;
+            border-radius: 8px;
+            background: white;
+            margin-right: 14px;
+            margin-top: 0;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .consent-check input[type="checkbox"]:checked {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .consent-check input[type="checkbox"]:checked::after {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: 4px;
+            width: 8px;
+            height: 14px;
+            border: solid white;
+            border-width: 0 3px 3px 0;
+            transform: rotate(45deg);
+            border-radius: 1px;
+        }
+
+        .consent-check input[type="checkbox"]:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
         .consent-check label {
-            font-weight: normal;
-            display: inline;
-            font-size: 0.95em;
-            line-height: 1.4;
-            cursor: pointer; /* весь текст тоже кликабелен */
+            font-weight: 400;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: var(--text);
+            cursor: pointer;
+            display: block;
         }
-        .consent-text { font-size: 0.9em; }
-        .toggle-link { color: #2196F3; cursor: pointer; text-decoration: underline; font-size: 0.9em; margin-left: 5px; display: inline-block; margin-top: 8px; }
-        .full-consent { display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #ccc; border-radius: 4px; max-height: 200px; overflow-y: auto; font-size: 0.9em; line-height: 1.5; }
-        .full-consent.show { display: block; }
+
+        .toggle-link {
+            color: var(--accent);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-top: 12px;
+            display: inline-block;
+            text-decoration: none;
+            border-bottom: 1px dashed var(--accent);
+            transition: color 0.2s;
+        }
+
+        .toggle-link:hover {
+            color: #0b7dda;
+        }
+
+        .full-consent {
+            display: none;
+            margin-top: 16px;
+            padding: 16px;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: var(--text-light);
+            max-height: 220px;
+            overflow-y: auto;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .full-consent.show {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Кнопка отправки */
+        button[type="submit"] {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            background: #ccc;
+            color: white;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+            letter-spacing: 0.5px;
+        }
+
+        button[type="submit"]:not(:disabled) {
+            background: var(--primary);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+
+        button[type="submit"]:not(:disabled):hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(56, 142, 60, 0.5);
+        }
+
+        button[type="submit"]:not(:disabled):active {
+            transform: translateY(0);
+            box-shadow: 0 4px 14px rgba(76, 175, 80, 0.4);
+        }
+
+        button[type="submit"]:disabled {
+            background: #cbd5e1;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        /* Сообщения Flash */
+        .flash {
+            padding: 14px 16px;
+            margin-bottom: 24px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+        }
+
+        .flash.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .flash.error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #f44336;
+        }
+
+        .flash.warning {
+            background: #fff3e0;
+            color: #e65100;
+            border-left: 4px solid #ff9800;
+        }
+
+        /* Адаптация для очень маленьких экранов */
+        @media (max-width: 400px) {
+            .container {
+                padding: 24px 16px;
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Введите данные</h1>
+        <h1>Регистрация</h1>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -62,40 +291,41 @@
             {% endif %}
         {% endwith %}
 
-        <form method="POST" action="/" id="mainForm">
+        <form method="POST" action="/" id="mainForm" novalidate>
             <div class="form-group">
-                <label for="full_name">ФИО:</label>
-                <input type="text" id="full_name" name="full_name" required placeholder="Иванов Иван Иванович">
-            </div>
-            <div class="form-group">
-                <label for="birth_date">Дата рождения:</label>
-                <input type="date" id="birth_date" name="birth_date" required>
-            </div>
-            <div class="form-group">
-                <label for="phone">Номер телефона:</label>
-                <input type="tel" id="phone" name="phone" required placeholder="+7 (999) 123-45-67">
-                <div class="note">Введите в любом формате</div>
+                <label for="full_name">ФИО</label>
+                <input type="text" id="full_name" name="full_name" required placeholder="Иванов Иван Иванович" autocomplete="name">
             </div>
 
-            <!-- Блок согласия с улучшенным чекбоксом -->
+            <div class="form-group">
+                <label for="birth_date">Дата рождения</label>
+                <input type="date" id="birth_date" name="birth_date" required>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Номер телефона</label>
+                <input type="tel" id="phone" name="phone" required placeholder="+7 (999) 123-45-67" autocomplete="tel">
+                <div class="note">Можно вводить в любом формате</div>
+            </div>
+
+            <!-- Блок согласия -->
             <div class="consent-block">
                 <div class="consent-check">
                     <input type="checkbox" id="consent" name="consent" value="accepted">
                     <label for="consent">
-                        Подписание настоящего Согласия означает принятие и согласие лица с Условиями согласия Участника 
-                        (Положение №1 Согласие на участие и обработку персональных данных ИП Николаенко И. Г.)
+                        Нажимая галочку, вы принимаете условия Согласия участника (Положение №1). 
+                        Это обязательно для продолжения.
                     </label>
                 </div>
-                <span class="toggle-link" onclick="toggleConsent()">▼ Показать полный текст согласия</span>
+                <span class="toggle-link" onclick="toggleConsent()">▼ Прочитать полный текст</span>
                 <div id="fullConsent" class="full-consent">
-                    <h4>Положение №1</h4>
+                    <h4 style="margin-top:0; color:#2c3e50;">Положение №1</h4>
                     <p><strong>Согласие на участие и обработку персональных данных ИП Николаенко И.Г.</strong></p>
-
                     <p>1. Участник самостоятельно ознакомится с условиями настоящего Договора Офферты, расположенного в сообществе по адресу https://vk.com/portal_vr_pskov. Своевременно и в полном объеме оплатить услуги, указанные в п.л. 2.1. настоящего Договора, на условиях раздела 4 Договора.</p>
-                    <p>2. Получить оказываемые услуги, в полном объеме</p>
-                    <p>3. Обеспечить присмотр за детьми в течении всего времени аренды помещений и оборудования парка. Контролировать действия детей в . пределах помещений клуба и нести ответственность за их действия и безопасность</p>
-                    <p>4. Cледовать оглашенным оператором парка правилам во время игровой сессии.</p>
-                    <p>5. Бережно относится к имушеству парка. Возместить ущерб, причиненный Заказчиком или его ребенком имуществу парка.</p>
+                    <p>2. Получить оказываемые услуги в полном объеме.</p>
+                    <p>3. Обеспечить присмотр за детьми в течение всего времени аренды помещений и оборудования парка. Контролировать действия детей в пределах помещений клуба и нести ответственность за их действия и безопасность.</p>
+                    <p>4. Следовать оглашенным оператором парка правилам во время игровой сессии.</p>
+                    <p>5. Бережно относиться к имуществу парка. Возместить ущерб, причиненный Заказчиком или его ребенком имуществу парка.</p>
                     <p>6. Соблюдать правила внутреннего распорядка парка.</p>
                     <p>7. Согласовать употребление алкогольных напитков с администратором парка.</p>
                     <p>8. Употреблять еду и напитки только за столом (включая печенье и конфеты).</p>
@@ -104,7 +334,6 @@
 
             <button type="submit" id="submitBtn" disabled>Отправить</button>
         </form>
-
     </div>
 
     <script>
@@ -113,22 +342,20 @@
         const fullConsentDiv = document.getElementById('fullConsent');
         const toggleLink = document.querySelector('.toggle-link');
 
-        // Блокировка/разблокировка кнопки отправки
         function updateSubmitButton() {
             submitBtn.disabled = !consentCheckbox.checked;
         }
 
         consentCheckbox.addEventListener('change', updateSubmitButton);
-        
-        // Раскрытие/скрытие полного текста
+
         function toggleConsent() {
             fullConsentDiv.classList.toggle('show');
             toggleLink.innerHTML = fullConsentDiv.classList.contains('show') 
-                ? '▲ Скрыть полный текст согласия' 
-                : '▼ Показать полный текст согласия';
+                ? '▲ Скрыть полный текст' 
+                : '▼ Прочитать полный текст';
         }
 
-        // Инициализация при загрузке (на случай, если страница загрузилась с отмеченным чекбоксом)
+        // Инициализация
         updateSubmitButton();
     </script>
 </body>

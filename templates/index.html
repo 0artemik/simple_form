@@ -24,10 +24,28 @@
         .flash.warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
         .note { font-size: 0.9em; color: #666; margin-top: 5px; }
         .consent-block { margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 4px; border: 1px solid #ddd; }
-        .consent-check { display: flex; align-items: center; margin-bottom: 10px; }
-        .consent-check input { margin-right: 10px; width: auto; }
+        .consent-check { display: flex; align-items: flex-start; margin-bottom: 10px; }
+        /* Увеличенный и заметный чекбокс */
+        .consent-check input[type="checkbox"] {
+            width: 22px;
+            height: 22px;
+            min-width: 22px;
+            min-height: 22px;
+            margin-right: 12px;
+            margin-top: 2px; /* небольшая доводка по вертикали с началом текста */
+            cursor: pointer;
+            accent-color: #4CAF50; /* зелёный флажок в современных браузерах */
+            /* Улучшение для старых браузеров — оставляем стандартный вид, но крупнее */
+        }
+        .consent-check label {
+            font-weight: normal;
+            display: inline;
+            font-size: 0.95em;
+            line-height: 1.4;
+            cursor: pointer; /* весь текст тоже кликабелен */
+        }
         .consent-text { font-size: 0.9em; }
-        .toggle-link { color: #2196F3; cursor: pointer; text-decoration: underline; font-size: 0.9em; margin-left: 5px; }
+        .toggle-link { color: #2196F3; cursor: pointer; text-decoration: underline; font-size: 0.9em; margin-left: 5px; display: inline-block; margin-top: 8px; }
         .full-consent { display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #ccc; border-radius: 4px; max-height: 200px; overflow-y: auto; font-size: 0.9em; line-height: 1.5; }
         .full-consent.show { display: block; }
     </style>
@@ -59,11 +77,11 @@
                 <div class="note">Введите в любом формате</div>
             </div>
 
-            <!-- Блок согласия -->
+            <!-- Блок согласия с улучшенным чекбоксом -->
             <div class="consent-block">
                 <div class="consent-check">
                     <input type="checkbox" id="consent" name="consent" value="accepted">
-                    <label for="consent" style="display: inline; font-weight: normal;">
+                    <label for="consent">
                         Подписание настоящего Согласия означает принятие и согласие лица с Условиями согласия Участника 
                         (Положение №1 Согласие на участие и обработку персональных данных ИП Николаенко И. Г.)
                     </label>
@@ -74,19 +92,18 @@
                     <p><strong>Согласие на участие и обработку персональных данных ИП Николаенко И.Г.</strong></p>
 
                     <p>1. Участник самостоятельно ознакомится с условиями настоящего Договора Офферты, расположенного в сообществе по адресу https://vk.com/portal_vr_pskov. Своевременно и в полном объеме оплатить услуги, указанные в п.л. 2.1. настоящего Договора, на условиях раздела 4 Договора.</p>
-                    <p></p>2. Получить оказываемые услуги, в полном объеме</p>
+                    <p>2. Получить оказываемые услуги, в полном объеме</p>
                     <p>3. Обеспечить присмотр за детьми в течении всего времени аренды помещений и оборудования парка. Контролировать действия детей в . пределах помещений клуба и нести ответственность за их действия и безопасность</p>
                     <p>4. Cледовать оглашенным оператором парка правилам во время игровой сессии.</p>
                     <p>5. Бережно относится к имушеству парка. Возместить ущерб, причиненный Заказчиком или его ребенком имуществу парка.</p>
                     <p>6. Соблюдать правила внутреннего распорядка парка.</p>
                     <p>7. Согласовать употребление алкогольных напитков с администратором парка.</p>
-                    <p></p>8. Употреблять еду и напитки только за столом (включая печенье и конфеты).</p>
+                    <p>8. Употреблять еду и напитки только за столом (включая печенье и конфеты).</p>
                 </div>
             </div>
 
             <button type="submit" id="submitBtn" disabled>Отправить</button>
         </form>
-
 
     </div>
 

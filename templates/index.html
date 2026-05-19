@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Форма регистрации</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="date"], input[type="tel"] {
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
+        }
+        button { background: #4CAF50; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; }
+        button:hover { background: #45a049; }
+        button:disabled { background: #cccccc; cursor: not-allowed; }
+        .export-btn { background: #2196F3; margin-top: 10px; }
+        .export-btn:hover { background: #0b7dda; }
+        .flash { padding: 10px; margin-bottom: 20px; border-radius: 4px; }
+        .flash.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .flash.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .flash.warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .note { font-size: 0.9em; color: #666; margin-top: 5px; }
+        .consent-block { margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 4px; border: 1px solid #ddd; }
+        .consent-check { display: flex; align-items: center; margin-bottom: 10px; }
+        .consent-check input { margin-right: 10px; width: auto; }
+        .consent-text { font-size: 0.9em; }
+        .toggle-link { color: #2196F3; cursor: pointer; text-decoration: underline; font-size: 0.9em; margin-left: 5px; }
+        .full-consent { display: none; margin-top: 15px; padding: 15px; background: white; border: 1px solid #ccc; border-radius: 4px; max-height: 200px; overflow-y: auto; font-size: 0.9em; line-height: 1.5; }
+        .full-consent.show { display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Введите данные</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="/" id="mainForm">
+            <div class="form-group">
+                <label for="full_name">ФИО:</label>
+                <input type="text" id="full_name" name="full_name" required placeholder="Иванов Иван Иванович">
+            </div>
+            <div class="form-group">
+                <label for="birth_date">Дата рождения:</label>
+                <input type="date" id="birth_date" name="birth_date" required>
+            </div>
+            <div class="form-group">
+                <label for="phone">Номер телефона:</label>
+                <input type="tel" id="phone" name="phone" required placeholder="+7 (999) 123-45-67">
+                <div class="note">Введите в любом формате</div>
+            </div>
+
+            <!-- Блок согласия -->
+            <div class="consent-block">
+                <div class="consent-check">
+                    <input type="checkbox" id="consent" name="consent" value="accepted">
+                    <label for="consent" style="display: inline; font-weight: normal;">
+                        Подписание настоящего Согласия означает принятие и согласие лица с Условиями согласия Участника 
+                        (Положение №1 Согласие на участие и обработку персональных данных ИП Николаенко И. Г.)
+                    </label>
+                </div>
+                <span class="toggle-link" onclick="toggleConsent()">▼ Показать полный текст согласия</span>
+                <div id="fullConsent" class="full-consent">
+                    <h4>Положение №1</h4>
+                    <p><strong>Согласие на участие и обработку персональных данных ИП Николаенко И.Г.</strong></p>
+
+                    <p>1. Участник самостоятельно ознакомится с условиями настоящего Договора Офферты, расположенного в сообществе по адресу https://vk.com/portal_vr_pskov. Своевременно и в полном объеме оплатить услуги, указанные в п.л. 2.1. настоящего Договора, на условиях раздела 4 Договора.</p>
+                    <p></p>2. Получить оказываемые услуги, в полном объеме</p>
+                    <p>3. Обеспечить присмотр за детьми в течении всего времени аренды помещений и оборудования парка. Контролировать действия детей в . пределах помещений клуба и нести ответственность за их действия и безопасность</p>
+                    <p>4. Cледовать оглашенным оператором парка правилам во время игровой сессии.</p>
+                    <p>5. Бережно относится к имушеству парка. Возместить ущерб, причиненный Заказчиком или его ребенком имуществу парка.</p>
+                    <p>6. Соблюдать правила внутреннего распорядка парка.</p>
+                    <p>7. Согласовать употребление алкогольных напитков с администратором парка.</p>
+                    <p></p>8. Употреблять еду и напитки только за столом (включая печенье и конфеты).</p>
+                </div>
+            </div>
+
+            <button type="submit" id="submitBtn" disabled>Отправить</button>
+        </form>
+
+
+    </div>
+
+    <script>
+        const consentCheckbox = document.getElementById('consent');
+        const submitBtn = document.getElementById('submitBtn');
+        const fullConsentDiv = document.getElementById('fullConsent');
+        const toggleLink = document.querySelector('.toggle-link');
+
+        // Блокировка/разблокировка кнопки отправки
+        function updateSubmitButton() {
+            submitBtn.disabled = !consentCheckbox.checked;
+        }
+
+        consentCheckbox.addEventListener('change', updateSubmitButton);
+        
+        // Раскрытие/скрытие полного текста
+        function toggleConsent() {
+            fullConsentDiv.classList.toggle('show');
+            toggleLink.innerHTML = fullConsentDiv.classList.contains('show') 
+                ? '▲ Скрыть полный текст согласия' 
+                : '▼ Показать полный текст согласия';
+        }
+
+        // Инициализация при загрузке (на случай, если страница загрузилась с отмеченным чекбоксом)
+        updateSubmitButton();
+    </script>
+</body>
+</html>

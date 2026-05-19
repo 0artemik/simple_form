@@ -109,5 +109,6 @@ def export():
     df.to_excel(output_path, index=False, engine='openpyxl')
     return send_file(output_path, as_attachment=True, download_name='persons_export.xlsx')
 
+init_db()
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

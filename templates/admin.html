@@ -6,16 +6,30 @@
     <title>Админ-панель</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { color: #333; }
         table { width: 100%; border-collapse: collapse; margin: 20px 0; }
         th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
         th { background-color: #f2f2f2; }
-        .btn { background: #2196F3; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .btn { background: #2196F3; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-right: 10px; }
         .btn:hover { background: #0b7dda; }
+        .btn-green { background: #4CAF50; }
+        .btn-green:hover { background: #388E3C; }
+        .btn-orange { background: #FF9800; }
+        .btn-orange:hover { background: #F57C00; }
         .back-link { margin-top: 20px; display: block; }
         .flash { padding: 10px; margin-bottom: 20px; border-radius: 4px; }
+        .flash.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .flash.warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        select, input[type="text"] { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
+        .children-list { font-size: 0.85rem; color: #555; }
+        .toolbar { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+        .toolbar label { font-weight: bold; }
+        .save-all-btn { background: #E91E63; color: white; padding: 10px 25px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
+        .save-all-btn:hover { background: #C2185B; }
+        .export-shift-btn { background: #388E3C; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold; text-decoration: none; display: inline-block; }
+        .export-shift-btn:hover { background: #2E7D32; }
+        .section-title { font-size: 0.85rem; color: #888; margin-bottom: 4px; }
     </style>
 </head>
 <body>
@@ -30,7 +44,48 @@
             {% endif %}
         {% endwith %}
 
-        <p>Всего записей: {{ persons|length }}</p>
+        <!-- Фильтр по дате -->
+        <div class="toolbar">
+            <label>Дата (МСК):</label>
+            <input type="date" id="filter_date" value="{{ filter_date }}">
+            <button class="btn" onclick="applyFilter()">Показать</button>
+            {% if show_all == '1' %}
+                <a href="{{ url_for('admin_panel') }}" class="btn btn-orange">← Сегодня</a>
+            {% else %}
+                <a href="{{ url_for('admin_panel', all='1') }}" class="btn">Показать всю базу</a>
+            {% endif %}
+            <button id="saveAllBtn" class="save-all-btn">💾 Сохранить все изменения</button>
+        </div>
+
+        <!-- Экспорт -->
+        <div class="toolbar">
+            <!-- Главная кнопка: экспорт текущей смены (выбранная дата или сегодня) -->
+            <div>
+                <div class="section-title">📤 Загрузить в amoCRM:</div>
+                {% if show_all == '1' %}
+                    <a href="{{ url_for('export_amo', all='1') }}" class="export-shift-btn">
+                        📥 CSV — вся база
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('export_amo', date=filter_date) }}" class="export-shift-btn">
+                        📥 CSV за {{ filter_date }}{% if filter_date == today %} (сегодня){% endif %}
+                    </a>
+                {% endif %}
+            </div>
+
+            <!-- Дополнительные экспорты -->
+            <a href="{{ url_for('export_amo', all='1') }}" class="btn btn-green">📥 CSV вся база</a>
+            <a href="{{ url_for('export', date=filter_date) if show_all != '1' else url_for('export', all='1') }}" class="btn">📊 Excel</a>
+        </div>
+
+        <p>
+            Всего записей: <strong>{{ persons|length }}</strong>
+            {% if show_all == '1' %}
+                (вся база)
+            {% else %}
+                за {{ filter_date }}{% if filter_date == today %} (сегодня){% endif %}
+            {% endif %}
+        </p>
 
         <table>
             <thead>
@@ -39,24 +94,99 @@
                     <th>ФИО</th>
                     <th>Дата рождения</th>
                     <th>Телефон</th>
-                    <th>Создано</th>
+                    <th>Дети</th>
+                    <th>Игровая зона</th>
+                    <th>Длительность</th>
+                    <th>Бюджет</th>
+                    <th>Создано (МСК)</th>
                 </tr>
             </thead>
             <tbody>
                 {% for p in persons %}
-                <tr>
+                <tr class="row-form" data-id="{{ p.id }}">
                     <td>{{ p.id }}</td>
                     <td>{{ p.full_name }}</td>
                     <td>{{ p.birth_date }}</td>
                     <td>{{ p.phone }}</td>
+                    <td>
+                        {% if p.children %}
+                            <span class="children-list">
+                                {% for child in p.children %}
+                                    {{ child.child_name }} ({{ child.child_birth_date }})<br>
+                                {% endfor %}
+                            </span>
+                        {% else %}
+                            Нет
+                        {% endif %}
+                    </td>
+                    <td>
+                        <select name="game_zone">
+                            <option value="">—</option>
+                            {% for zone in game_zones %}
+                                <option value="{{ zone }}" {% if p.game_zone == zone %}selected{% endif %}>{{ zone }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="duration">
+                            <option value="">—</option>
+                            {% for dur in durations %}
+                                <option value="{{ dur }}" {% if p.duration == dur %}selected{% endif %}>{{ dur }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" name="budget" value="{{ p.budget }}" size="6" placeholder="0">
+                    </td>
                     <td>{{ p.created_at }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
 
-        <a href="{{ url_for('export') }}" class="btn">📥 Скачать Excel-отчёт</a>
         <a href="{{ url_for('index') }}" class="back-link">← Вернуться к форме</a>
     </div>
+
+    <script>
+        function applyFilter() {
+            const d = document.getElementById('filter_date').value;
+            if (d) {
+                window.location.href = '?date=' + d;
+            } else {
+                window.location.href = '{{ url_for("admin_panel") }}';
+            }
+        }
+
+        // Глобальное сохранение всех строк
+        document.getElementById('saveAllBtn').addEventListener('click', async () => {
+            const forms = document.querySelectorAll('.row-form');
+            const data = [];
+
+            forms.forEach(form => {
+                const id = form.dataset.id;
+                const gameZone = form.querySelector('select[name="game_zone"]').value;
+                const duration = form.querySelector('select[name="duration"]').value;
+                const budget = form.querySelector('input[name="budget"]').value.trim();
+                data.push({ id: parseInt(id), game_zone: gameZone, duration, budget });
+            });
+
+            try {
+                const resp = await fetch('{{ url_for("update_all") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    alert(`Обновлено записей: ${result.updated}`);
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + result.message);
+                }
+            } catch (e) {
+                alert('Ошибка соединения');
+            }
+        });
+    </script>
 </body>
 </html>

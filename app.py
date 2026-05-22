@@ -392,7 +392,8 @@ def export():
     return send_file(output_path, as_attachment=True, download_name='persons_export.xlsx')
 
 
+init_db()  # вызов при любом способе запуска
+
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True, host='0.0.0.0', port=5001)
     

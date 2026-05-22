@@ -113,6 +113,35 @@
             box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.15);
         }
 
+        /* Состояние ошибки */
+        input.is-error,
+        select.is-error {
+            border-color: #F44336 !important;
+            box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.15) !important;
+            background: #fff8f8;
+        }
+
+        .field-error {
+            color: #C62828;
+            font-size: 0.78rem;
+            margin-top: 5px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            animation: errorIn 0.2s ease;
+        }
+
+        .field-error::before {
+            content: "⚠";
+            font-size: 0.85rem;
+        }
+
+        @keyframes errorIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .note {
             font-size: 0.75rem;
             color: var(--text-light);
@@ -148,11 +177,16 @@
             background: #F5F3FF;
             border-radius: 16px;
             border: 2px solid var(--border);
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
 
         .consent-block:focus-within {
             border-color: var(--primary);
+        }
+
+        .consent-block.is-error {
+            border-color: #F44336 !important;
+            box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.15) !important;
         }
 
         .consent-check {
@@ -204,6 +238,26 @@
             cursor: pointer;
         }
 
+        .consent-error {
+            color: #C62828;
+            font-size: 0.78rem;
+            margin-top: 8px;
+            font-weight: 500;
+            display: none;
+            align-items: center;
+            gap: 4px;
+            animation: errorIn 0.2s ease;
+        }
+
+        .consent-error.show {
+            display: flex;
+        }
+
+        .consent-error::before {
+            content: "⚠";
+            font-size: 0.85rem;
+        }
+
         .toggle-link {
             color: var(--primary);
             cursor: pointer;
@@ -249,37 +303,39 @@
             padding: 16px;
             font-size: 1.1rem;
             font-weight: 700;
-            background: #ccc;
+            background: var(--primary);
             color: white;
             border: none;
             border-radius: 14px;
             cursor: pointer;
             transition: all 0.25s ease;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 20px rgba(124, 92, 252, 0.4);
             letter-spacing: 0.5px;
             font-family: var(--font);
         }
 
-        button[type="submit"]:not(:disabled) {
-            background: var(--primary);
-            box-shadow: 0 8px 20px rgba(124, 92, 252, 0.4);
-        }
-
-        button[type="submit"]:not(:disabled):hover {
+        button[type="submit"]:hover {
             background: var(--primary-dark);
             transform: translateY(-2px);
             box-shadow: 0 12px 25px rgba(90, 63, 207, 0.5);
         }
 
-        button[type="submit"]:not(:disabled):active {
+        button[type="submit"]:active {
             transform: translateY(0);
             box-shadow: 0 4px 14px rgba(124, 92, 252, 0.4);
         }
 
-        button[type="submit"]:disabled {
-            background: #D3CFF0;
-            box-shadow: none;
-            cursor: not-allowed;
+        /* Shake-анимация при ошибке отправки */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%       { transform: translateX(-6px); }
+            40%       { transform: translateX(6px); }
+            60%       { transform: translateX(-4px); }
+            80%       { transform: translateX(4px); }
+        }
+
+        .shake {
+            animation: shake 0.4s ease;
         }
 
         .flash {
@@ -333,26 +389,26 @@
             {% endif %}
         {% endwith %}
 
-        <form method="POST" action="/" id="mainForm" novalidate>
+        <form method="POST" action="/" id="mainForm">
             <div class="form-group">
                 <label for="full_name">ФИО</label>
-                <input type="text" id="full_name" name="full_name" required placeholder="Иванов Иван Иванович" autocomplete="name">
+                <input type="text" id="full_name" name="full_name" placeholder="Иванов Иван Иванович" autocomplete="name">
             </div>
 
             <div class="form-group">
                 <label for="birth_date">Дата рождения</label>
-                <input type="date" id="birth_date" name="birth_date" required>
+                <input type="date" id="birth_date" name="birth_date">
             </div>
 
             <div class="form-group">
                 <label for="phone">Номер телефона</label>
-                <input type="tel" id="phone" name="phone" required placeholder="+7 (999) 123-45-67" autocomplete="tel">
+                <input type="tel" id="phone" name="phone" placeholder="+7 (999) 123-45-67" autocomplete="tel">
                 <div class="note">Можно вводить в любом формате</div>
             </div>
 
             <div class="form-group">
                 <label for="game_zone">Игровая зона</label>
-                <select id="game_zone" name="game_zone" required>
+                <select id="game_zone" name="game_zone">
                     <option value="" disabled selected>Выберите зону</option>
                     {% for zone in game_zones %}
                         <option value="{{ zone }}">{{ zone }}</option>
@@ -374,13 +430,14 @@
             </div>
 
             <!-- Согласие -->
-            <div class="consent-block">
+            <div class="consent-block" id="consentBlock">
                 <div class="consent-check">
                     <input type="checkbox" id="consent" name="consent" value="accepted">
                     <label for="consent">
                         Нажимая галочку, вы принимаете условия Согласия участника (Положение №1). Это обязательно для продолжения.
                     </label>
                 </div>
+                <div class="consent-error" id="consentError">Необходимо принять условия согласия</div>
                 <span class="toggle-link" onclick="toggleConsent()">▼ Прочитать полный текст</span>
                 <div id="fullConsent" class="full-consent">
                     <h4 style="margin-top:0; color:#2D2A3E;">Положение №1</h4>
@@ -396,30 +453,128 @@
                 </div>
             </div>
 
-            <button type="submit" id="submitBtn" disabled>Отправить</button>
+            <button type="submit" id="submitBtn">Отправить</button>
         </form>
     </div>
 
     <script>
         const consentCheckbox = document.getElementById('consent');
-        const submitBtn = document.getElementById('submitBtn');
-        const fullConsentDiv = document.getElementById('fullConsent');
-        const toggleLink = document.querySelector('.toggle-link');
+        const consentBlock    = document.getElementById('consentBlock');
+        const consentError    = document.getElementById('consentError');
+        const fullConsentDiv  = document.getElementById('fullConsent');
+        const toggleLink      = document.querySelector('.toggle-link');
+        const submitBtn       = document.getElementById('submitBtn');
 
-        function updateSubmitButton() {
-            submitBtn.disabled = !consentCheckbox.checked;
-        }
-
-        consentCheckbox.addEventListener('change', updateSubmitButton);
-
+        // ── Разворачивание текста согласия ──────────────────────────────
         function toggleConsent() {
             fullConsentDiv.classList.toggle('show');
-            toggleLink.innerHTML = fullConsentDiv.classList.contains('show') 
-                ? '▲ Скрыть полный текст' 
+            toggleLink.innerHTML = fullConsentDiv.classList.contains('show')
+                ? '▲ Скрыть полный текст'
                 : '▼ Прочитать полный текст';
         }
 
-        updateSubmitButton();
+        // ── Установка / снятие ошибки для поля ──────────────────────────
+        function setError(el, msg) {
+            el.classList.add('is-error');
+            let err = el.parentElement.querySelector('.field-error');
+            if (!err) {
+                err = document.createElement('div');
+                err.className = 'field-error';
+                // Вставляем сразу после поля, перед .note (если есть)
+                const note = el.parentElement.querySelector('.note');
+                if (note) {
+                    el.parentElement.insertBefore(err, note);
+                } else {
+                    el.parentElement.appendChild(err);
+                }
+            }
+            err.textContent = msg;
+        }
+
+        function clearError(el) {
+            el.classList.remove('is-error');
+            const err = el.parentElement.querySelector('.field-error');
+            if (err) err.remove();
+        }
+
+        // ── Снимаем ошибку при взаимодействии с полем ───────────────────
+        ['full_name', 'birth_date', 'phone', 'game_zone'].forEach(id => {
+            const el = document.getElementById(id);
+            el.addEventListener('input',  () => clearError(el));
+            el.addEventListener('change', () => clearError(el));
+        });
+
+        consentCheckbox.addEventListener('change', () => {
+            if (consentCheckbox.checked) {
+                consentBlock.classList.remove('is-error');
+                consentError.classList.remove('show');
+            }
+        });
+
+        // ── Валидация и отправка формы ───────────────────────────────────
+        document.getElementById('mainForm').addEventListener('submit', function (e) {
+            let valid = true;
+
+            const fullName  = document.getElementById('full_name');
+            const birthDate = document.getElementById('birth_date');
+            const phone     = document.getElementById('phone');
+            const gameZone  = document.getElementById('game_zone');
+
+            // ФИО
+            if (!fullName.value.trim()) {
+                setError(fullName, 'Введите ФИО');
+                valid = false;
+            } else {
+                clearError(fullName);
+            }
+
+            // Дата рождения
+            if (!birthDate.value) {
+                setError(birthDate, 'Укажите дату рождения');
+                valid = false;
+            } else {
+                clearError(birthDate);
+            }
+
+            // Телефон
+            if (!phone.value.trim()) {
+                setError(phone, 'Введите номер телефона');
+                valid = false;
+            } else {
+                clearError(phone);
+            }
+
+            // Игровая зона
+            if (!gameZone.value) {
+                setError(gameZone, 'Выберите игровую зону');
+                valid = false;
+            } else {
+                clearError(gameZone);
+            }
+
+            // Согласие
+            if (!consentCheckbox.checked) {
+                consentBlock.classList.add('is-error');
+                consentError.classList.add('show');
+                valid = false;
+            }
+
+            if (!valid) {
+                e.preventDefault();
+
+                // Shake-эффект на кнопке
+                submitBtn.classList.remove('shake');
+                void submitBtn.offsetWidth; // reflow для перезапуска анимации
+                submitBtn.classList.add('shake');
+                submitBtn.addEventListener('animationend', () => submitBtn.classList.remove('shake'), { once: true });
+
+                // Прокрутка к первой ошибке
+                const firstError = document.querySelector('.field-error, .consent-block.is-error');
+                if (firstError) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        });
     </script>
 </body>
 </html>

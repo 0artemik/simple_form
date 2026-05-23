@@ -83,7 +83,6 @@
         }
 
         input[type="text"],
-        input[type="date"],
         input[type="tel"],
         select {
             width: 100%;
@@ -96,12 +95,14 @@
             -webkit-appearance: none;
             appearance: none;
             font-family: var(--font);
+            color: var(--text);
         }
 
         select {
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236E6A7C' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right 16px center;
+            background-color: #FAF9FF;
             padding-right: 40px;
         }
 
@@ -113,7 +114,6 @@
             box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.15);
         }
 
-        /* Состояние ошибки */
         input.is-error,
         select.is-error {
             border-color: #F44336 !important;
@@ -325,7 +325,6 @@
             box-shadow: 0 4px 14px rgba(124, 92, 252, 0.4);
         }
 
-        /* Shake-анимация при ошибке отправки */
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
             20%       { transform: translateX(-6px); }
@@ -391,18 +390,26 @@
 
         <form method="POST" action="/" id="mainForm">
             <div class="form-group">
-                <label for="full_name">ФИО</label>
+                <label for="full_name">ФИО родителя</label>
                 <input type="text" id="full_name" name="full_name" placeholder="Иванов Иван Иванович" autocomplete="name">
             </div>
 
             <div class="form-group">
                 <label for="birth_date">Дата рождения</label>
-                <input type="date" id="birth_date" name="birth_date">
+                <input
+                    type="tel"
+                    id="birth_date"
+                    name="birth_date"
+                    placeholder="ДД.ММ.ГГГГ"
+                    maxlength="10"
+                    inputmode="numeric"
+                    autocomplete="bday"
+                >
             </div>
 
             <div class="form-group">
                 <label for="phone">Номер телефона</label>
-                <input type="tel" id="phone" name="phone" placeholder="+7 (999) 123-45-67" autocomplete="tel">
+                <input type="tel" id="phone" name="phone" placeholder="+79991234567" autocomplete="tel">
                 <div class="note">Можно вводить в любом формате</div>
             </div>
 
@@ -425,7 +432,14 @@
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                     <label for="child_birth_date">Дата рождения</label>
-                    <input type="date" id="child_birth_date" name="child_birth_date">
+                    <input
+                        type="tel"
+                        id="child_birth_date"
+                        name="child_birth_date"
+                        placeholder="ДД.ММ.ГГГГ"
+                        maxlength="10"
+                        inputmode="numeric"
+                    >
                 </div>
             </div>
 
@@ -450,6 +464,7 @@
                     <p>6. Соблюдать правила внутреннего распорядка парка.</p>
                     <p>7. Согласовать употребление алкогольных напитков с администратором парка.</p>
                     <p>8. Употреблять еду и напитки только за столом (включая печенье и конфеты).</p>
+                    <p>9. Обработка персональных данных</p>
                 </div>
             </div>
 
@@ -458,14 +473,37 @@
     </div>
 
     <script>
-        const consentCheckbox = document.getElementById('consent');
-        const consentBlock    = document.getElementById('consentBlock');
-        const consentError    = document.getElementById('consentError');
-        const fullConsentDiv  = document.getElementById('fullConsent');
-        const toggleLink      = document.querySelector('.toggle-link');
-        const submitBtn       = document.getElementById('submitBtn');
+        // ── Маска для поля даты ──────────────────────────────────────────
+        function applyDateMask(input) {
+            input.addEventListener('input', function () {
+                const pos = this.selectionStart;
+                const prev = this.value;
+                let digits = prev.replace(/\D/g, '').slice(0, 8);
+                let masked = '';
+                if (digits.length >= 1) masked = digits.slice(0, 2);
+                if (digits.length >= 3) masked += '.' + digits.slice(2, 4);
+                if (digits.length >= 5) masked += '.' + digits.slice(4, 8);
+                this.value = masked;
+            });
+
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Backspace') {
+                    const v = this.value;
+                    if (v.endsWith('.')) {
+                        e.preventDefault();
+                        this.value = v.slice(0, -2);
+                    }
+                }
+            });
+        }
+
+        applyDateMask(document.getElementById('birth_date'));
+        applyDateMask(document.getElementById('child_birth_date'));
 
         // ── Разворачивание текста согласия ──────────────────────────────
+        const fullConsentDiv = document.getElementById('fullConsent');
+        const toggleLink     = document.querySelector('.toggle-link');
+
         function toggleConsent() {
             fullConsentDiv.classList.toggle('show');
             toggleLink.innerHTML = fullConsentDiv.classList.contains('show')
@@ -480,7 +518,6 @@
             if (!err) {
                 err = document.createElement('div');
                 err.className = 'field-error';
-                // Вставляем сразу после поля, перед .note (если есть)
                 const note = el.parentElement.querySelector('.note');
                 if (note) {
                     el.parentElement.insertBefore(err, note);
@@ -504,6 +541,11 @@
             el.addEventListener('change', () => clearError(el));
         });
 
+        const consentCheckbox = document.getElementById('consent');
+        const consentBlock    = document.getElementById('consentBlock');
+        const consentError    = document.getElementById('consentError');
+        const submitBtn       = document.getElementById('submitBtn');
+
         consentCheckbox.addEventListener('change', () => {
             if (consentCheckbox.checked) {
                 consentBlock.classList.remove('is-error');
@@ -511,14 +553,31 @@
             }
         });
 
+        // ── Валидация даты ───────────────────────────────────────────────
+        function validateDate(value) {
+            const pattern = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+            const match = value.match(pattern);
+            if (!match) return false;
+            const [, dd, mm, yyyy] = match;
+            const d = new Date(yyyy + '-' + mm + '-' + dd);
+            return (
+                d instanceof Date && !isNaN(d) &&
+                d.getDate()     === +dd &&
+                d.getMonth() + 1 === +mm &&
+                d.getFullYear() === +yyyy &&
+                +yyyy >= 1900 &&
+                +yyyy <= new Date().getFullYear()
+            );
+        }
+
         // ── Валидация и отправка формы ───────────────────────────────────
         document.getElementById('mainForm').addEventListener('submit', function (e) {
             let valid = true;
 
-            const fullName  = document.getElementById('full_name');
-            const birthDate = document.getElementById('birth_date');
-            const phone     = document.getElementById('phone');
-            const gameZone  = document.getElementById('game_zone');
+            const fullName     = document.getElementById('full_name');
+            const birthDate    = document.getElementById('birth_date');
+            const phone        = document.getElementById('phone');
+            const gameZone     = document.getElementById('game_zone');
 
             // ФИО
             if (!fullName.value.trim()) {
@@ -529,8 +588,8 @@
             }
 
             // Дата рождения
-            if (!birthDate.value) {
-                setError(birthDate, 'Укажите дату рождения');
+            if (!validateDate(birthDate.value)) {
+                setError(birthDate, 'Введите дату в формате ДД.ММ.ГГГГ');
                 valid = false;
             } else {
                 clearError(birthDate);
@@ -562,13 +621,11 @@
             if (!valid) {
                 e.preventDefault();
 
-                // Shake-эффект на кнопке
                 submitBtn.classList.remove('shake');
-                void submitBtn.offsetWidth; // reflow для перезапуска анимации
+                void submitBtn.offsetWidth;
                 submitBtn.classList.add('shake');
                 submitBtn.addEventListener('animationend', () => submitBtn.classList.remove('shake'), { once: true });
 
-                // Прокрутка к первой ошибке
                 const firstError = document.querySelector('.field-error, .consent-block.is-error');
                 if (firstError) {
                     firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });

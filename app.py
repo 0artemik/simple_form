@@ -36,7 +36,6 @@ def init_db():
         )
     ''')
 
-    # Добавляем столбцы для совместимости со старыми БД
     for col, col_type in [('game_zone', "TEXT DEFAULT ''"),
                           ('duration', "TEXT DEFAULT ''"),
                           ('budget', "TEXT DEFAULT ''")]:
@@ -57,6 +56,22 @@ def init_db():
 
     conn.commit()
     conn.close()
+
+
+def parse_date(date_str):
+    """
+    Принимает дату в формате ДД.ММ.ГГГГ (с формы) или ГГГГ-ММ-ДД (старые записи).
+    Возвращает дату в формате ГГГГ-ММ-ДД для хранения в БД.
+    Бросает ValueError если формат не распознан.
+    """
+    date_str = (date_str or '').strip()
+    if not date_str:
+        raise ValueError('Дата не указана')
+    # Новый формат с формы: ДД.ММ.ГГГГ
+    if '.' in date_str:
+        return datetime.strptime(date_str, '%d.%m.%Y').strftime('%Y-%m-%d')
+    # Старый формат (на случай прямого POST): ГГГГ-ММ-ДД
+    return datetime.strptime(date_str, '%Y-%m-%d').strftime('%Y-%m-%d')
 
 
 def get_age(birth_date_str, as_of=None):
@@ -101,12 +116,11 @@ def requires_auth(f):
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        full_name = request.form.get('full_name', '').strip()
-        birth_date = request.form.get('birth_date', '').strip()
-        phone = request.form.get('phone', '').strip()
-        game_zone = request.form.get('game_zone', '').strip()
+        full_name  = request.form.get('full_name', '').strip()
+        phone      = request.form.get('phone', '').strip()
+        game_zone  = request.form.get('game_zone', '').strip()
 
-        if not full_name or not birth_date or not phone:
+        if not full_name or not phone:
             flash('Все поля обязательны для заполнения!', 'error')
             return redirect(url_for('index'))
 
@@ -118,30 +132,42 @@ def index():
             flash('Некорректная игровая зона.', 'error')
             return redirect(url_for('index'))
 
+        # Дата рождения: принимаем ДД.ММ.ГГГГ, конвертируем в ГГГГ-ММ-ДД
         try:
-            datetime.strptime(birth_date, '%Y-%m-%d')
+            birth_date = parse_date(request.form.get('birth_date', ''))
         except ValueError:
-            flash('Неверный формат даты. Используйте ГГГГ-ММ-ДД', 'error')
+            flash('Неверный формат даты рождения. Используйте ДД.ММ.ГГГГ', 'error')
             return redirect(url_for('index'))
 
         if not request.form.get('consent'):
             flash('Необходимо принять условия согласия!', 'error')
             return redirect(url_for('index'))
 
-        # Сохраняем с текущим временем в МСК (UTC+3)
         created_at = (datetime.utcnow() + timedelta(hours=3)).strftime('%Y-%m-%d %H:%M:%S')
 
         conn = sqlite3.connect(DATABASE)
         c = conn.cursor()
-        c.execute('INSERT INTO persons (full_name, birth_date, phone, game_zone, created_at) VALUES (?, ?, ?, ?, ?)',
-                  (full_name, birth_date, phone, game_zone, created_at))
+        c.execute(
+            'INSERT INTO persons (full_name, birth_date, phone, game_zone, created_at) VALUES (?, ?, ?, ?, ?)',
+            (full_name, birth_date, phone, game_zone, created_at)
+        )
         person_id = c.lastrowid
 
-        child_name = request.form.get('child_name', '').strip()
-        child_birth_date = request.form.get('child_birth_date', '').strip()
-        if child_name and child_birth_date:
-            c.execute('INSERT INTO children (person_id, child_name, child_birth_date) VALUES (?, ?, ?)',
-                      (person_id, child_name, child_birth_date))
+        child_name           = request.form.get('child_name', '').strip()
+        child_birth_date_raw = request.form.get('child_birth_date', '').strip()
+
+        if child_name and child_birth_date_raw:
+            try:
+                child_birth_date = parse_date(child_birth_date_raw)
+            except ValueError:
+                conn.close()
+                flash('Неверный формат даты рождения ребёнка. Используйте ДД.ММ.ГГГГ', 'error')
+                return redirect(url_for('index'))
+
+            c.execute(
+                'INSERT INTO children (person_id, child_name, child_birth_date) VALUES (?, ?, ?)',
+                (person_id, child_name, child_birth_date)
+            )
 
         conn.commit()
         conn.close()
@@ -155,16 +181,15 @@ def index():
 @app.route('/admin')
 @requires_auth
 def admin_panel():
-    # По умолчанию показываем сегодняшний день по МСК
-    today_str = msk_today().strftime('%Y-%m-%d')
+    today_str   = msk_today().strftime('%Y-%m-%d')
     filter_date = request.args.get('date', today_str).strip()
-    show_all = request.args.get('all', '0')
+    show_all    = request.args.get('all', '0')
 
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    query = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, created_at FROM persons"
+    query  = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, created_at FROM persons"
     params = ()
     if show_all != '1' and filter_date:
         query += " WHERE DATE(created_at) = ?"
@@ -175,36 +200,43 @@ def admin_panel():
 
     persons_with_children = []
     for p in persons:
-        cur.execute("SELECT child_name, child_birth_date FROM children WHERE person_id = ? ORDER BY id", (p['id'],))
+        cur.execute(
+            "SELECT child_name, child_birth_date FROM children WHERE person_id = ? ORDER BY id",
+            (p['id'],)
+        )
         children = cur.fetchall()
         persons_with_children.append({
-            'id': p['id'],
-            'full_name': p['full_name'],
+            'id':         p['id'],
+            'full_name':  p['full_name'],
             'birth_date': p['birth_date'],
-            'phone': p['phone'],
-            'game_zone': p['game_zone'] or '',
-            'duration': p['duration'] or '',
-            'budget': p['budget'] or '',
-            'created_at': p['created_at'],  # уже МСК
-            'children': children
+            'phone':      p['phone'],
+            'game_zone':  p['game_zone'] or '',
+            'duration':   p['duration']  or '',
+            'budget':     p['budget']    or '',
+            'created_at': p['created_at'],
+            'children':   children
         })
 
     conn.close()
-    return render_template('admin.html',
-                           persons=persons_with_children,
-                           game_zones=GAME_ZONES,
-                           durations=DURATIONS,
-                           filter_date=filter_date,
-                           show_all=show_all,
-                           today=today_str)
+    return render_template(
+        'admin.html',
+        persons=persons_with_children,
+        game_zones=GAME_ZONES,
+        durations=DURATIONS,
+        filter_date=filter_date,
+        show_all=show_all,
+        today=today_str
+    )
 
 
 @app.route('/update_row/<int:person_id>', methods=['POST'])
 @requires_auth
 def update_row(person_id):
+    full_name = request.form.get('full_name', '').strip()
+    phone     = request.form.get('phone',     '').strip()
     game_zone = request.form.get('game_zone', '').strip()
-    duration = request.form.get('duration', '').strip()
-    budget = request.form.get('budget', '').strip()
+    duration  = request.form.get('duration',  '').strip()
+    budget    = request.form.get('budget',    '').strip()
 
     if game_zone and game_zone not in GAME_ZONES:
         game_zone = ''
@@ -213,8 +245,10 @@ def update_row(person_id):
 
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
-    c.execute("UPDATE persons SET game_zone = ?, duration = ?, budget = ? WHERE id = ?",
-              (game_zone, duration, budget, person_id))
+    c.execute(
+        "UPDATE persons SET full_name = ?, phone = ?, game_zone = ?, duration = ?, budget = ? WHERE id = ?",
+        (full_name, phone, game_zone, duration, budget, person_id)
+    )
     conn.commit()
     conn.close()
     flash('Данные обновлены.', 'success')
@@ -233,10 +267,12 @@ def update_all():
     c = conn.cursor()
     updated = 0
     for item in data:
-        pid = item.get('id')
+        pid       = item.get('id')
+        full_name = item.get('full_name', '').strip()
+        phone     = item.get('phone',     '').strip()
         game_zone = item.get('game_zone', '').strip()
-        duration = item.get('duration', '').strip()
-        budget = item.get('budget', '').strip()
+        duration  = item.get('duration',  '').strip()
+        budget    = item.get('budget',    '').strip()
 
         if not pid:
             continue
@@ -245,8 +281,10 @@ def update_all():
         if duration and duration not in DURATIONS:
             duration = ''
 
-        c.execute("UPDATE persons SET game_zone = ?, duration = ?, budget = ? WHERE id = ?",
-                  (game_zone, duration, budget, pid))
+        c.execute(
+            "UPDATE persons SET full_name = ?, phone = ?, game_zone = ?, duration = ?, budget = ? WHERE id = ?",
+            (full_name, phone, game_zone, duration, budget, pid)
+        )
         updated += c.rowcount
 
     conn.commit()
@@ -258,28 +296,30 @@ def update_all():
 @requires_auth
 def export_amo():
     filter_date = request.args.get('date', '').strip()
-    export_all = request.args.get('all', '0')
+    export_all  = request.args.get('all',  '0')
 
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    query = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, created_at FROM persons"
+    query  = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, created_at FROM persons"
     params = ()
     if filter_date and export_all != '1':
         query += " WHERE DATE(created_at) = ?"
         params = (filter_date,)
-    query += " ORDER BY created_at ASC"  # хронологический порядок для импорта
+    query += " ORDER BY created_at ASC"
     cur.execute(query, params)
     persons = cur.fetchall()
 
-    # Определяем первое появление номера по всей базе
     cur.execute("SELECT phone, MIN(id) as first_id FROM persons GROUP BY phone")
     first_occurrence = {row['phone']: row['first_id'] for row in cur.fetchall()}
 
     rows = []
     for p in persons:
-        cur.execute("SELECT child_name, child_birth_date FROM children WHERE person_id = ? ORDER BY id", (p['id'],))
+        cur.execute(
+            "SELECT child_name, child_birth_date FROM children WHERE person_id = ? ORDER BY id",
+            (p['id'],)
+        )
         children = cur.fetchall()
 
         if children:
@@ -287,8 +327,8 @@ def export_amo():
         else:
             age = get_age(p['birth_date'])
 
-        child_names = ', '.join([c['child_name'] for c in children]) if children else '-'
-        child_birth_dates = ', '.join([c['child_birth_date'] for c in children]) if children else '-'
+        child_names       = ', '.join([c['child_name']        for c in children]) if children else '-'
+        child_birth_dates = ', '.join([c['child_birth_date']  for c in children]) if children else '-'
 
         created_str = p['created_at']
         if created_str:
@@ -301,7 +341,7 @@ def export_amo():
             created_datetime = ''
 
         zone = p['game_zone'] or ''
-        dur = p['duration'] or ''
+        dur  = p['duration']  or ''
         if zone and dur:
             deal_name = f"{zone} {dur}"
         elif zone:
@@ -316,24 +356,24 @@ def export_amo():
             client_type = 'Повторное посещение'
 
         rows.append({
-            'Название сделки': deal_name,
-            'Этап сделки': 'Успешно реализовано',
-            'ФИО клиента': p['full_name'],
-            'Тип клиента': client_type,
-            'Предоплата': '0',
-            'Дата и время создания': created_datetime,
-            'Длительность': dur if dur else '60 мин',
-            'Возраст': age,
-            'Источник': 'Оффлайн/На месте',
-            'Вид мероприятия': 'одиночная игра',
-            'Администратор': '-',
-            'Количество участников': '1',
-            'Дата и время начала': created_datetime,
-            'Имя ребенка': child_names,
-            'Дата рождения ребенка': child_birth_dates,
-            'Бюджет': p['budget'] or '',
-            'Полное имя': p['full_name'],
-            'Рабочий телефон': p['phone']
+            'Название сделки':        deal_name,
+            'Этап сделки':            'Успешно реализовано',
+            'ФИО клиента':            p['full_name'],
+            'Тип клиента':            client_type,
+            'Предоплата':             '0',
+            'Дата и время создания':  created_datetime,
+            'Длительность':           dur if dur else '60 мин',
+            'Возраст':                age,
+            'Источник':               'Оффлайн/На месте',
+            'Вид мероприятия':        'одиночная игра',
+            'Администратор':          '-',
+            'Количество участников':  '1',
+            'Дата и время начала':    created_datetime,
+            'Имя ребенка':            child_names,
+            'Дата рождения ребенка':  child_birth_dates,
+            'Бюджет':                 p['budget'] or '',
+            'Полное имя':             p['full_name'],
+            'Рабочий телефон':        p['phone']
         })
 
     conn.close()
@@ -352,17 +392,14 @@ def export_amo():
     ]
     df = df[column_order]
 
-    # Разделитель ";" — именно его ожидает amoCRM (показывает "Запятая (;)" в настройках импорта).
-    # При запятой-разделителе amoCRM не может распарсить строки и показывает только 2 последних.
     str_buffer = io.StringIO()
     df.to_csv(str_buffer, index=False, encoding='utf-8', lineterminator='\n', sep=';')
-    csv_content = '\ufeff' + str_buffer.getvalue()  # BOM для корректного открытия в Excel
+    csv_content = '\ufeff' + str_buffer.getvalue()
     output = io.BytesIO(csv_content.encode('utf-8'))
     output.seek(0)
 
-    # Имя файла с датой для удобства
     date_label = filter_date if (filter_date and export_all != '1') else 'all'
-    filename = f'amo_import_{date_label}.csv'
+    filename   = f'amo_import_{date_label}.csv'
 
     return send_file(output, as_attachment=True, download_name=filename, mimetype='text/csv; charset=utf-8')
 
@@ -371,10 +408,10 @@ def export_amo():
 @requires_auth
 def export():
     filter_date = request.args.get('date', '').strip()
-    export_all = request.args.get('all', '0')
+    export_all  = request.args.get('all',  '0')
 
-    conn = sqlite3.connect(DATABASE)
-    query = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, created_at FROM persons"
+    conn   = sqlite3.connect(DATABASE)
+    query  = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, created_at FROM persons"
     params = ()
     if filter_date and export_all != '1':
         query += " WHERE DATE(created_at) = ?"
@@ -392,8 +429,6 @@ def export():
     return send_file(output_path, as_attachment=True, download_name='persons_export.xlsx')
 
 
-init_db()  # вызов при любом способе запуска
-
 if __name__ == '__main__':
+    init_db()
     app.run(debug=True, host='0.0.0.0', port=5001)
-    

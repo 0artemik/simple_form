@@ -22,6 +22,13 @@
         .flash.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .flash.warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
         select, input[type="text"] { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
+        input[type="text"].field-name { width: 180px; }
+        input[type="text"].field-phone { width: 140px; }
+        input[type="text"].field-budget { width: 70px; }
+        input[type="text"].field-edited {
+            border-color: #FF9800;
+            background: #fff8f0;
+        }
         .children-list { font-size: 0.85rem; color: #555; }
         .toolbar { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
         .toolbar label { font-weight: bold; }
@@ -59,7 +66,6 @@
 
         <!-- Экспорт -->
         <div class="toolbar">
-            <!-- Главная кнопка: экспорт текущей смены (выбранная дата или сегодня) -->
             <div>
                 <div class="section-title">📤 Загрузить в amoCRM:</div>
                 {% if show_all == '1' %}
@@ -72,8 +78,6 @@
                     </a>
                 {% endif %}
             </div>
-
-            <!-- Дополнительные экспорты -->
             <a href="{{ url_for('export_amo', all='1') }}" class="btn btn-green">📥 CSV вся база</a>
             <a href="{{ url_for('export', date=filter_date) if show_all != '1' else url_for('export', all='1') }}" class="btn">📊 Excel</a>
         </div>
@@ -105,9 +109,25 @@
                 {% for p in persons %}
                 <tr class="row-form" data-id="{{ p.id }}">
                     <td>{{ p.id }}</td>
-                    <td>{{ p.full_name }}</td>
+                    <td>
+                        <input
+                            type="text"
+                            name="full_name"
+                            value="{{ p.full_name }}"
+                            class="field-name"
+                            data-original="{{ p.full_name }}"
+                        >
+                    </td>
                     <td>{{ p.birth_date }}</td>
-                    <td>{{ p.phone }}</td>
+                    <td>
+                        <input
+                            type="text"
+                            name="phone"
+                            value="{{ p.phone }}"
+                            class="field-phone"
+                            data-original="{{ p.phone }}"
+                        >
+                    </td>
                     <td>
                         {% if p.children %}
                             <span class="children-list">
@@ -136,7 +156,7 @@
                         </select>
                     </td>
                     <td>
-                        <input type="text" name="budget" value="{{ p.budget }}" size="6" placeholder="0">
+                        <input type="text" name="budget" value="{{ p.budget }}" class="field-budget" placeholder="0">
                     </td>
                     <td>{{ p.created_at }}</td>
                 </tr>
@@ -150,24 +170,34 @@
     <script>
         function applyFilter() {
             const d = document.getElementById('filter_date').value;
-            if (d) {
-                window.location.href = '?date=' + d;
-            } else {
-                window.location.href = '{{ url_for("admin_panel") }}';
-            }
+            window.location.href = d ? '?date=' + d : '{{ url_for("admin_panel") }}';
         }
+
+        // Подсвечиваем изменённые поля ФИО и телефон
+        document.querySelectorAll('input[data-original]').forEach(input => {
+            input.addEventListener('input', function () {
+                if (this.value !== this.dataset.original) {
+                    this.classList.add('field-edited');
+                } else {
+                    this.classList.remove('field-edited');
+                }
+            });
+        });
 
         // Глобальное сохранение всех строк
         document.getElementById('saveAllBtn').addEventListener('click', async () => {
-            const forms = document.querySelectorAll('.row-form');
+            const rows = document.querySelectorAll('.row-form');
             const data = [];
 
-            forms.forEach(form => {
-                const id = form.dataset.id;
-                const gameZone = form.querySelector('select[name="game_zone"]').value;
-                const duration = form.querySelector('select[name="duration"]').value;
-                const budget = form.querySelector('input[name="budget"]').value.trim();
-                data.push({ id: parseInt(id), game_zone: gameZone, duration, budget });
+            rows.forEach(row => {
+                data.push({
+                    id:        parseInt(row.dataset.id),
+                    full_name: row.querySelector('input[name="full_name"]').value.trim(),
+                    phone:     row.querySelector('input[name="phone"]').value.trim(),
+                    game_zone: row.querySelector('select[name="game_zone"]').value,
+                    duration:  row.querySelector('select[name="duration"]').value,
+                    budget:    row.querySelector('input[name="budget"]').value.trim()
+                });
             });
 
             try {

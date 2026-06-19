@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import pandas as pd
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash, abort, Response, jsonify
@@ -10,7 +11,9 @@ import io
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here-change-in-production'
 
-DATABASE = 'database.db'
+DATA_DIR = '/app/data'
+os.makedirs(DATA_DIR, exist_ok=True)
+DATABASE = os.path.join(DATA_DIR, 'database.db')
 
 ADMIN_USERNAME = 'admin'
 ADMIN_PASSWORD_HASH = 'scrypt:32768:8:1$nuwPRu2QnaqLMhzd$dcb673a5be6db73c5564b62793c176fb5f6c15f83417cea468bfd81349aad6b133d6564a6936ea6d96595edc6bd16d935e7b2113a0704fe545ee3b2bee2a97ac'
@@ -429,6 +432,8 @@ def export():
     return send_file(output_path, as_attachment=True, download_name='persons_export.xlsx')
 
 init_db() 
+
+init_db()
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

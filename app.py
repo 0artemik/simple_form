@@ -1,4 +1,7 @@
+import os
+import re
 import sqlite3
+import tempfile
 import pandas as pd
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash, abort, Response, jsonify
 from datetime import datetime, date, timedelta
@@ -19,6 +22,143 @@ GAME_ZONES = ['Стационарный VR', 'Арена', 'Автосимуля
 DURATIONS = ['30 мин', '1 час', '2 часа', '3 часа', '4 часа', 'Более 4 часов']
 
 
+def normalize_phone(phone: str) -> str:
+    """Приводит телефон к единому формату +7XXXXXXXXXX."""
+    digits = re.sub(r'\D', '', phone or '')
+    if len(digits) == 11 and digits[0] in ('7', '8'):
+        digits = '7' + digits[1:]
+    elif len(digits) == 10:
+        digits = '7' + digits
+    if len(digits) == 11 and digits[0] == '7':
+        return '+' + digits
+    return (phone or '').strip()
+
+
+def parse_import_date(value):
+    if value is None:
+        return ''
+    text = str(value).strip()
+    if not text:
+        return ''
+    for fmt in ('%d.%m.%Y', '%Y-%m-%d', '%d/%m/%Y', '%d.%m.%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S'):
+        try:
+            return datetime.strptime(text, fmt).strftime('%Y-%m-%d')
+        except ValueError:
+            continue
+    return ''
+
+
+def parse_import_datetime(value):
+    if value is None:
+        return ''
+    text = str(value).strip()
+    if not text:
+        return ''
+    for fmt in ('%d.%m.%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', '%d.%m.%Y', '%Y-%m-%d', '%d/%m/%Y %H:%M:%S', '%d/%m/%Y'):
+        try:
+            return datetime.strptime(text, fmt).strftime('%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            continue
+    return ''
+
+
+def normalize_boolean(value):
+    if isinstance(value, bool):
+        return 1 if value else 0
+    text = str(value or '').strip().lower()
+    if text in {'1', 'true', 'да', 'yes', 'y', 'да/нет', 'on'}:
+        return 1
+    return 0
+
+
+def get_first_value(row, aliases):
+    normalized = {str(k).strip().lower(): k for k in row.index}
+    for alias in aliases:
+        key = normalized.get(alias.lower())
+        if key is None:
+            continue
+        value = row.get(key, '')
+        if value is None:
+            continue
+        value = str(value).strip()
+        if value:
+            return value
+    return ''
+
+
+def import_from_csv(file_path):
+    try:
+        df = pd.read_csv(file_path, sep=None, engine='python', dtype=str, keep_default_na=False, encoding='utf-8-sig')
+    except Exception as exc:
+        return {'success': False, 'message': f'Не удалось прочитать CSV: {exc}'}
+
+    if df.empty:
+        return {'success': False, 'message': 'Файл пустой.'}
+
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    imported = 0
+    skipped = 0
+    now_dt = (datetime.utcnow() + timedelta(hours=3)).strftime('%Y-%m-%d %H:%M:%S')
+
+    for _, row in df.iterrows():
+        full_name = get_first_value(row, ['full_name', 'фио клиента', 'полное имя', 'фио', 'name', 'client_name'])
+        if not full_name:
+            skipped += 1
+            continue
+
+        phone = normalize_phone(get_first_value(row, ['phone', 'телефон', 'рабочий телефон', 'phone_number', 'номер телефона']))
+        if not re.fullmatch(r'\+7\d{10}', phone):
+            skipped += 1
+            continue
+
+        birth_date = get_first_value(row, ['birth_date', 'дата рождения', 'дата рождения клиента', 'birth date', 'birthday', 'date_of_birth', 'date of birth'])
+        birth_date = parse_import_date(birth_date) or ''
+
+        game_zone = get_first_value(row, ['game_zone', 'игровая зона', 'игровая зона / зона', 'zone', 'game zone', 'game_zone_name'])
+        duration = get_first_value(row, ['duration', 'длительность', 'duration_hours', 'time'])
+        budget = get_first_value(row, ['budget', 'бюджет', 'budget_amount'])
+        minor_consent = normalize_boolean(get_first_value(row, ['minor_consent', 'согласие законных представителей', 'согласие', 'consent']))
+
+        child_name = get_first_value(row, ['child_name', 'имя ребенка', 'ребёнок', 'имя ребёнка', 'child'])
+        child_birth_date = get_first_value(row, ['child_birth_date', 'дата рождения ребенка', 'дата рождения ребёнка', 'child birth date'])
+        child_birth_date = parse_import_date(child_birth_date) or ''
+
+        created_at = get_first_value(row, ['created_at', 'дата и время создания', 'created', 'created_at_dt'])
+        created_at = parse_import_datetime(created_at) or now_dt
+
+        existing = c.execute("SELECT id FROM persons WHERE phone = ? LIMIT 1", (phone,)).fetchone()
+        if existing:
+            person_id = existing[0]
+            c.execute(
+                "UPDATE persons SET full_name = ?, birth_date = ?, phone = ?, game_zone = ?, duration = ?, budget = ?, minor_consent = ?, created_at = ? WHERE id = ?",
+                (full_name, birth_date, phone, game_zone, duration, budget, minor_consent, created_at, person_id)
+            )
+        else:
+            c.execute(
+                "INSERT INTO persons (full_name, birth_date, phone, game_zone, duration, budget, minor_consent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (full_name, birth_date, phone, game_zone, duration, budget, minor_consent, created_at)
+            )
+            person_id = c.lastrowid
+
+        if child_name and child_birth_date:
+            existing_child = c.execute(
+                "SELECT id FROM children WHERE person_id = ? AND child_name = ? AND child_birth_date = ? LIMIT 1",
+                (person_id, child_name, child_birth_date)
+            ).fetchone()
+            if not existing_child:
+                c.execute(
+                    "INSERT INTO children (person_id, child_name, child_birth_date) VALUES (?, ?, ?)",
+                    (person_id, child_name, child_birth_date)
+                )
+
+        imported += 1
+
+    conn.commit()
+    conn.close()
+    return {'success': True, 'imported': imported, 'skipped': skipped}
+
+
 def init_db():
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
@@ -32,13 +172,15 @@ def init_db():
             game_zone TEXT DEFAULT '',
             duration TEXT DEFAULT '',
             budget TEXT DEFAULT '',
+            minor_consent INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now'))
         )
     ''')
 
     for col, col_type in [('game_zone', "TEXT DEFAULT ''"),
                           ('duration', "TEXT DEFAULT ''"),
-                          ('budget', "TEXT DEFAULT ''")]:
+                          ('budget', "TEXT DEFAULT ''"),
+                          ('minor_consent', "INTEGER DEFAULT 0")]:
         try:
             c.execute(f"ALTER TABLE persons ADD COLUMN {col} {col_type}")
         except sqlite3.OperationalError:
@@ -53,6 +195,13 @@ def init_db():
             FOREIGN KEY (person_id) REFERENCES persons (id)
         )
     ''')
+
+    # Нормализуем телефоны в существующих записях для единообразного поиска
+    c.execute("SELECT id, phone FROM persons")
+    for row_id, phone in c.fetchall():
+        normalized = normalize_phone(phone)
+        if normalized and normalized != phone:
+            c.execute("UPDATE persons SET phone = ? WHERE id = ?", (normalized, row_id))
 
     conn.commit()
     conn.close()
@@ -143,13 +292,20 @@ def index():
             flash('Необходимо принять условия согласия!', 'error')
             return redirect(url_for('index'))
 
+        phone = normalize_phone(phone)
+        if not re.fullmatch(r'\+7\d{10}', phone):
+            flash('Введите корректный номер телефона', 'error')
+            return redirect(url_for('index'))
+
+        minor_consent = 1 if request.form.get('minor_consent') else 0
+
         created_at = (datetime.utcnow() + timedelta(hours=3)).strftime('%Y-%m-%d %H:%M:%S')
 
         conn = sqlite3.connect(DATABASE)
         c = conn.cursor()
         c.execute(
-            'INSERT INTO persons (full_name, birth_date, phone, game_zone, created_at) VALUES (?, ?, ?, ?, ?)',
-            (full_name, birth_date, phone, game_zone, created_at)
+            'INSERT INTO persons (full_name, birth_date, phone, game_zone, minor_consent, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            (full_name, birth_date, phone, game_zone, minor_consent, created_at)
         )
         person_id = c.lastrowid
 
@@ -178,22 +334,62 @@ def index():
     return render_template('index.html', game_zones=GAME_ZONES)
 
 
+@app.route('/import_csv', methods=['POST'])
+@requires_auth
+def import_csv():
+    uploaded = request.files.get('csv_file')
+    if not uploaded or uploaded.filename == '':
+        flash('Файл не выбран.', 'warning')
+        return redirect(url_for('admin_panel'))
+
+    with tempfile.NamedTemporaryFile('wb', suffix='.csv', delete=False) as tmp:
+        uploaded.save(tmp.name)
+        tmp_path = tmp.name
+
+    try:
+        result = import_from_csv(tmp_path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    if result.get('success'):
+        details = f"Импортировано клиентов: {result['imported']}"
+        if result.get('skipped'):
+            details += f", пропущено: {result['skipped']}"
+        flash(details, 'success')
+    else:
+        flash(result.get('message', 'Не удалось импортировать CSV.'), 'warning')
+
+    return redirect(url_for('admin_panel'))
+
+
 @app.route('/admin')
 @requires_auth
 def admin_panel():
-    today_str   = msk_today().strftime('%Y-%m-%d')
-    filter_date = request.args.get('date', today_str).strip()
-    show_all    = request.args.get('all', '0')
+    today_str    = msk_today().strftime('%Y-%m-%d')
+    filter_date  = request.args.get('date', today_str).strip()
+    show_all     = request.args.get('all', '0')
+    phone_search = request.args.get('phone', '').strip()
 
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    query  = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, created_at FROM persons"
-    params = ()
-    if show_all != '1' and filter_date:
-        query += " WHERE DATE(created_at) = ?"
-        params = (filter_date,)
+    normalized_search = normalize_phone(phone_search) if phone_search else ''
+
+    query  = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, minor_consent, created_at FROM persons"
+    params = []
+    conditions = []
+
+    if normalized_search and re.fullmatch(r'\+7\d{10}', normalized_search):
+        conditions.append("phone = ?")
+        params.append(normalized_search)
+    elif show_all != '1' and filter_date:
+        conditions.append("DATE(created_at) = ?")
+        params.append(filter_date)
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY created_at DESC"
     cur.execute(query, params)
     persons = cur.fetchall()
@@ -206,15 +402,16 @@ def admin_panel():
         )
         children = cur.fetchall()
         persons_with_children.append({
-            'id':         p['id'],
-            'full_name':  p['full_name'],
-            'birth_date': p['birth_date'],
-            'phone':      p['phone'],
-            'game_zone':  p['game_zone'] or '',
-            'duration':   p['duration']  or '',
-            'budget':     p['budget']    or '',
-            'created_at': p['created_at'],
-            'children':   children
+            'id':            p['id'],
+            'full_name':     p['full_name'],
+            'birth_date':    p['birth_date'],
+            'phone':         p['phone'],
+            'game_zone':     p['game_zone'] or '',
+            'duration':      p['duration']  or '',
+            'budget':        p['budget']    or '',
+            'minor_consent': p['minor_consent'] or 0,
+            'created_at':    p['created_at'],
+            'children':      children
         })
 
     conn.close()
@@ -225,7 +422,8 @@ def admin_panel():
         durations=DURATIONS,
         filter_date=filter_date,
         show_all=show_all,
-        today=today_str
+        today=today_str,
+        phone_search=phone_search
     )
 
 
@@ -242,6 +440,8 @@ def update_row(person_id):
         game_zone = ''
     if duration and duration not in DURATIONS:
         duration = ''
+
+    phone = normalize_phone(phone)
 
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
@@ -281,6 +481,8 @@ def update_all():
         if duration and duration not in DURATIONS:
             duration = ''
 
+        phone = normalize_phone(phone)
+
         c.execute(
             "UPDATE persons SET full_name = ?, phone = ?, game_zone = ?, duration = ?, budget = ? WHERE id = ?",
             (full_name, phone, game_zone, duration, budget, pid)
@@ -302,7 +504,7 @@ def export_amo():
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    query  = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, created_at FROM persons"
+    query  = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, minor_consent, created_at FROM persons"
     params = ()
     if filter_date and export_all != '1':
         query += " WHERE DATE(created_at) = ?"
@@ -355,6 +557,8 @@ def export_amo():
         if p['phone'] in first_occurrence and p['id'] > first_occurrence[p['phone']]:
             client_type = 'Повторное посещение'
 
+        minor_consent_str = 'Да' if p['minor_consent'] else 'Нет'
+
         rows.append({
             'Название сделки':        deal_name,
             'Этап сделки':            'Успешно реализовано',
@@ -372,8 +576,9 @@ def export_amo():
             'Имя ребенка':            child_names,
             'Дата рождения ребенка':  child_birth_dates,
             'Бюджет':                 p['budget'] or '',
-            'Полное имя':             p['full_name'],
-            'Рабочий телефон':        p['phone']
+            'Полное имя':                          p['full_name'],
+            'Рабочий телефон':                     p['phone'],
+            'Согласие законных представителей':    minor_consent_str,
         })
 
     conn.close()
@@ -388,7 +593,7 @@ def export_amo():
         'Предоплата', 'Дата и время создания', 'Длительность', 'Возраст',
         'Источник', 'Вид мероприятия', 'Администратор', 'Количество участников',
         'Дата и время начала', 'Имя ребенка', 'Дата рождения ребенка', 'Бюджет',
-        'Полное имя', 'Рабочий телефон'
+        'Полное имя', 'Рабочий телефон', 'Согласие законных представителей',
     ]
     df = df[column_order]
 
@@ -411,7 +616,7 @@ def export():
     export_all  = request.args.get('all',  '0')
 
     conn   = sqlite3.connect(DATABASE)
-    query  = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, created_at FROM persons"
+    query  = "SELECT id, full_name, birth_date, phone, game_zone, duration, budget, minor_consent, created_at FROM persons"
     params = ()
     if filter_date and export_all != '1':
         query += " WHERE DATE(created_at) = ?"

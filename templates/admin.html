@@ -37,6 +37,11 @@
         .export-shift-btn { background: #388E3C; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold; text-decoration: none; display: inline-block; }
         .export-shift-btn:hover { background: #2E7D32; }
         .section-title { font-size: 0.85rem; color: #888; margin-bottom: 4px; }
+        .minor-yes { color: #2E7D32; font-weight: bold; }
+        .minor-no { color: #999; }
+        input[type="tel"].field-phone-search { width: 170px; }
+        .import-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .import-form input[type="file"] { border: 1px solid #ccc; padding: 6px; border-radius: 4px; background: white; }
     </style>
 </head>
 <body>
@@ -64,6 +69,32 @@
             <button id="saveAllBtn" class="save-all-btn">💾 Сохранить все изменения</button>
         </div>
 
+        <!-- Поиск по телефону -->
+        <div class="toolbar">
+            <label>Телефон:</label>
+            <input
+                type="tel"
+                id="phone_search"
+                class="field-phone-search"
+                value="{{ phone_search }}"
+                placeholder="+7 (___) ___-__-__"
+                maxlength="18"
+                inputmode="numeric"
+            >
+            <button class="btn" onclick="applyPhoneSearch()">Найти</button>
+            {% if phone_search %}
+                <a href="{{ url_for('admin_panel', date=filter_date, all=show_all) }}" class="btn btn-orange">Сбросить поиск</a>
+            {% endif %}
+        </div>
+
+        <div class="toolbar">
+            <form action="{{ url_for('import_csv') }}" method="post" enctype="multipart/form-data" class="import-form">
+                <label>📥 Импорт CSV:</label>
+                <input type="file" name="csv_file" accept=".csv,text/csv" required>
+                <button type="submit" class="btn btn-green">Импортировать</button>
+            </form>
+        </div>
+
         <!-- Экспорт -->
         <div class="toolbar">
             <div>
@@ -84,7 +115,9 @@
 
         <p>
             Всего записей: <strong>{{ persons|length }}</strong>
-            {% if show_all == '1' %}
+            {% if phone_search %}
+                (поиск по телефону: {{ phone_search }})
+            {% elif show_all == '1' %}
                 (вся база)
             {% else %}
                 за {{ filter_date }}{% if filter_date == today %} (сегодня){% endif %}
@@ -102,6 +135,7 @@
                     <th>Игровая зона</th>
                     <th>Длительность</th>
                     <th>Бюджет</th>
+                    <th>Согласие представителей</th>
                     <th>Создано (МСК)</th>
                 </tr>
             </thead>
@@ -158,6 +192,13 @@
                     <td>
                         <input type="text" name="budget" value="{{ p.budget }}" class="field-budget" placeholder="0">
                     </td>
+                    <td>
+                        {% if p.minor_consent %}
+                            <span class="minor-yes" title="Оплата произведена с согласием законных представителей">✓ Да</span>
+                        {% else %}
+                            <span class="minor-no">—</span>
+                        {% endif %}
+                    </td>
                     <td>{{ p.created_at }}</td>
                 </tr>
                 {% endfor %}
@@ -168,10 +209,76 @@
     </div>
 
     <script>
+        function applyPhoneMask(input) {
+            input.addEventListener('input', function () {
+                let digits = this.value.replace(/\D/g, '');
+
+                if (digits.startsWith('8')) {
+                    digits = '7' + digits.slice(1);
+                } else if (digits && !digits.startsWith('7')) {
+                    digits = '7' + digits;
+                }
+
+                digits = digits.slice(0, 11);
+
+                let masked = '+7';
+                if (digits.length > 1) masked += ' (' + digits.slice(1, 4);
+                if (digits.length >= 4) masked += ') ' + digits.slice(4, 7);
+                if (digits.length >= 7) masked += '-' + digits.slice(7, 9);
+                if (digits.length >= 9) masked += '-' + digits.slice(9, 11);
+
+                this.value = masked;
+            });
+
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Backspace') {
+                    const v = this.value;
+                    if (v.endsWith(') ') || v.endsWith('-')) {
+                        e.preventDefault();
+                        this.value = v.slice(0, -1);
+                    }
+                }
+            });
+        }
+
+        applyPhoneMask(document.getElementById('phone_search'));
+        document.querySelectorAll('.field-phone').forEach(applyPhoneMask);
+
+        function formatPhoneValue(value) {
+            const digits = (value || '').replace(/\D/g, '');
+            if (digits.length !== 11 || !digits.startsWith('7')) {
+                return value;
+            }
+            return '+7 (' + digits.slice(1, 4) + ') ' + digits.slice(4, 7) + '-' + digits.slice(7, 9) + '-' + digits.slice(9, 11);
+        }
+
+        document.querySelectorAll('.field-phone, #phone_search').forEach(function (el) {
+            if (el.value.trim()) {
+                el.value = formatPhoneValue(el.value);
+            }
+        });
+
         function applyFilter() {
             const d = document.getElementById('filter_date').value;
             window.location.href = d ? '?date=' + d : '{{ url_for("admin_panel") }}';
         }
+
+        function applyPhoneSearch() {
+            const phone = document.getElementById('phone_search').value.trim();
+            if (!phone) {
+                alert('Введите номер телефона для поиска');
+                return;
+            }
+            const params = new URLSearchParams({ phone: phone });
+            window.location.href = '?' + params.toString();
+        }
+
+        document.getElementById('phone_search').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applyPhoneSearch();
+            }
+        });
 
         // Подсвечиваем изменённые поля ФИО и телефон
         document.querySelectorAll('input[data-original]').forEach(input => {
